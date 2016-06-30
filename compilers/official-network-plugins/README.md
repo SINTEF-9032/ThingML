@@ -13,6 +13,19 @@ Network Plugin list:
         | Websocket
     | JavaSerialPlugin (java) handles:
         | Serial
+    | JavaUdpPlugin (java) handles:
+        | Udp
+        | UdpPort
+        | UdpPort_0
+        | UdpPort_1
+        | UdpPort_2
+        | UdpPort_3
+        | UdpPort_4
+        | UdpPort_5
+        | UdpPort_6
+        | UdpPort_7
+        | UdpPort_8
+        | UdpPort_9
     | PosixSerialPlugin (posix, posixmt) handles:
         | Serial
     | PosixNoPollWSPlugin (posix, posixmt) handles:
@@ -27,6 +40,38 @@ Network Plugin list:
         | Serial1
         | Serial2
         | Serial3
+    | RcdTimerPlugin (sintefboard) handles:
+        | RcdTimer_0
+        | RcdTimer_1
+        | RcdTimer_2
+        | RcdTimer_3
+        | RcdTimer_4
+        | RcdTimer_5
+        | RcdTimer_6
+        | RcdTimer_7
+        | RcdTimer_8
+        | RcdTimer_9
+    | RcdPortPlugin (sintefboard) handles:
+        | RcdPort_0
+        | RcdPort_1
+        | RcdPort_2
+        | RcdPort_3
+        | RcdPort_4
+        | RcdPort_5
+        | RcdPort_6
+        | RcdPort_7
+        | RcdPort_8
+        | RcdPort_9
+        | RcdPortTunnel_0
+        | RcdPortTunnel_1
+        | RcdPortTunnel_2
+        | RcdPortTunnel_3
+        | RcdPortTunnel_4
+        | RcdPortTunnel_5
+        | RcdPortTunnel_6
+        | RcdPortTunnel_7
+        | RcdPortTunnel_8
+        | RcdPortTunnel_9
     | PosixMQTTPlugin (posix, posixmt) handles:
         | MQTT
         | mqtt

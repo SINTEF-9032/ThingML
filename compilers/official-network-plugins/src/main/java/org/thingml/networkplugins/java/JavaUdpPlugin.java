@@ -35,20 +35,30 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public class JavaWSPlugin extends NetworkPlugin {
+public class JavaUdpPlugin extends NetworkPlugin {
 
-    public JavaWSPlugin() {
+    public JavaUdpPlugin() {
         super();
     }
 
     public String getPluginID() {
-        return "JavaWSPlugin";
+        return "JavaUdpPlugin";
     }
 
     public List<String> getSupportedProtocols() {
         List<String> res = new ArrayList<>();
-        res.add("websocket");
-        res.add("WS");
+        res.add("Udp");
+        res.add("UdpPort");
+        res.add("UdpPort_0");
+        res.add("UdpPort_1");
+        res.add("UdpPort_2");
+        res.add("UdpPort_3");
+        res.add("UdpPort_4");
+        res.add("UdpPort_5");
+        res.add("UdpPort_6");
+        res.add("UdpPort_7");
+        res.add("UdpPort_8");
+        res.add("UdpPort_9");
         return res;
     }
 
@@ -77,34 +87,12 @@ public class JavaWSPlugin extends NetworkPlugin {
         }
     }
 
-    private void updatePOM(Context ctx) {
-        //Update POM.xml with JSSC Maven dependency
-        try {
-            final InputStream input = new FileInputStream(ctx.getOutputDirectory() + "/pom.xml");
-            final List<String> packLines = IOUtils.readLines(input, Charset.forName("UTF-8"));
-            String pom = "";
-            for (String line : packLines) {
-                pom += line + "\n";
-            }
-            input.close();
-            pom = pom.replace("<!--DEP-->", "<dependency>\n" +
-                    "    <groupId>com.neovisionaries</groupId>\n" +
-                    "    <artifactId>nv-websocket-client</artifactId>\n" +
-                    "    <version>1.27</version>\n" +
-                    "</dependency>\n<!--DEP-->");
-            final File f = new File(ctx.getOutputDirectory() + "/pom.xml");
-            final OutputStream output = new FileOutputStream(f);
-            IOUtils.write(pom, output, java.nio.charset.Charset.forName("UTF-8"));
-            IOUtils.closeQuietly(output);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
     public void generateNetworkLibrary(Configuration cfg, Context ctx, Set<Protocol> protocols) {
-        updatePOM(ctx);
+
         StringBuilder builder = new StringBuilder();
         for (Protocol prot : protocols) {
+            System.out.println("UdpPlugin found protocol <"+prot.getName()+">");
+            
             String serializers = "";
             for (ThingPortMessage tpm : getMessagesSent(cfg, prot)) {
                 addMessage(tpm.m);
@@ -117,22 +105,23 @@ public class JavaWSPlugin extends NetworkPlugin {
                 uee.printStackTrace();
                 return;
             }
-
+            
             for (Message m : messages) {
                 StringBuilder temp = new StringBuilder();
-                serializers += sp.generateSerialization(temp, prot.getName() + "StringProtocol", m);
+                System.out.println("Generates serialization for message "+m.getName());
+                serializers += sp.generateSerialization(temp, prot.getName() + "BinaryProtocol", m);
             }
             messages.clear();
             builder = new StringBuilder();
             for (ThingPortMessage tpm : getMessagesReceived(cfg, prot)) {
                 addMessage(tpm.m);
             }
-            sp.generateParserBody(builder, prot.getName() + "StringProtocol", null, messages, null);
+            sp.generateParserBody(builder, prot.getName() + "BinaryProtocol", null, messages, null);
             final String result = builder.toString().replace("/*$SERIALIZERS$*/", serializers);
             try {
                 final File folder = new File(ctx.getOutputDirectory() + "/src/main/java/org/thingml/generated/network");
                 folder.mkdir();
-                final File f = new File(ctx.getOutputDirectory() + "/src/main/java/org/thingml/generated/network/" + prot.getName() + "StringProtocol.java");
+                final File f = new File(ctx.getOutputDirectory() + "/src/main/java/org/thingml/generated/network/" + prot.getName() + "BinaryProtocol.java");
                 final OutputStream output = new FileOutputStream(f);
                 IOUtils.write(result, output, Charset.forName("UTF-8"));
                 IOUtils.closeQuietly(output);
@@ -176,13 +165,13 @@ public class JavaWSPlugin extends NetworkPlugin {
             for (ThingPortMessage tpm : getMessagesReceived(cfg, prot)) {
                 addPort(tpm.p);
             }
-            String template = ctx.getTemplateByID("templates/JavaWSPlugin.java");
-            template = template.replace("/*$SERIALIZER$*/", prot.getName() + "StringProtocol");
+            String template = ctx.getTemplateByID("templates/JavaUdpPlugin.java");
+            template = template.replace("/*$SERIALIZER$*/", prot.getName() + "BinaryProtocol");
             StringBuilder parseBuilder = new StringBuilder();
-            parseBuilder.append("final Event event = " + prot.getName() + "StringProtocol.instantiate(payload);\n");
+            parseBuilder.append("final Event event = " + prot.getName() + "BinaryProtocol.instantiate(payload);\n");
             for(Port p : ports) {//FIXME
                 parseBuilder.append("if (event != null) " + p.getName() + "_port.send(event);\n");
-            }
+            };
             template = initPort(ctx, template);
             for (ExternalConnector conn : getExternalConnectors(cfg, prot)) {
                 updateMain(ctx, cfg, conn);
@@ -192,7 +181,7 @@ public class JavaWSPlugin extends NetworkPlugin {
             try {
                 final File folder = new File(ctx.getOutputDirectory() + "/src/main/java/org/thingml/generated/network");
                 folder.mkdir();
-                final File f = new File(ctx.getOutputDirectory() + "/src/main/java/org/thingml/generated/network/WSJava.java");
+                final File f = new File(ctx.getOutputDirectory() + "/src/main/java/org/thingml/generated/network/UdpJava.java");
                 final OutputStream output = new FileOutputStream(f);
                 IOUtils.write(template, output, Charset.forName("UTF-8"));
                 IOUtils.closeQuietly(output);
@@ -222,8 +211,13 @@ public class JavaWSPlugin extends NetworkPlugin {
                     main += line + "\n";
                 }
                 input.close();
-                final String url = AnnotatedElementHelper.annotationOrElse(conn.getProtocol(), "url", "ws://127.0.0.1:9000");
-                main = main.replace("/*$NETWORK$*/", "/*$NETWORK$*/\nWSJava " + conn.getName() + "_" + conn.getProtocol().getName() + " = (WSJava) new WSJava(\"" + url + "\").buildBehavior(null, null);\n");
+                //final String speed = AnnotatedElementHelper.hasAnnotation(conn.getProtocol(), "baudrate") ? AnnotatedElementHelper.annotation(conn.getProtocol(), "baudrate").get(0) : "9600";
+                //final String port = AnnotatedElementHelper.hasAnnotation(conn.getProtocol(), "port") ? AnnotatedElementHelper.annotation(conn.getProtocol(), "port").get(0) : "/dev/ttyACM0";
+                final String localPort = AnnotatedElementHelper.hasAnnotation(conn.getProtocol(), "udp_local_port") ? AnnotatedElementHelper.annotation(conn.getProtocol(), "udp_local_port").get(0) : "???";
+                final String remoteAddress = AnnotatedElementHelper.hasAnnotation(conn.getProtocol(), "udp_remote_address") ? AnnotatedElementHelper.annotation(conn.getProtocol(), "udp_remote_address").get(0) : "???";
+                final String remotePort = AnnotatedElementHelper.hasAnnotation(conn.getProtocol(), "udp_remote_port") ? AnnotatedElementHelper.annotation(conn.getProtocol(), "udp_remote_port").get(0) : "???";
+                System.out.println("UdpPlugin found following annotations <"+localPort+"> <"+remoteAddress+"> <"+remotePort+">");
+                main = main.replace("/*$NETWORK$*/", "/*$NETWORK$*/\nUdpJava " + conn.getName() + "_" + conn.getProtocol().getName() + " = (UdpJava) new UdpJava(\"" + localPort + "\", \"" + remoteAddress + "\", \"" + remotePort + "\").buildBehavior(null, null);\n");
 
                 StringBuilder connBuilder = new StringBuilder();
                 connBuilder.append(conn.getName() + "_" + conn.getProtocol().getName() + ".get" + ctx.firstToUpper(conn.getPort().getName()) + "_port().addListener(");

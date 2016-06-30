@@ -159,6 +159,8 @@ public class JavaByteArraySerializerPlugin extends SerializationPlugin {
 
         builder.append("/*$SERIALIZERS$*/\n\n");
         builder.append("}\n");
+        
+        clearMessages();  // TODO QuickAndDirty fix to handle militple runs of the serializer
     }
 
     @Override
