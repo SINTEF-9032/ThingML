@@ -136,6 +136,7 @@ public class JavaUdpPlugin extends NetworkPlugin {
         Context ctx;
         Protocol prot;
         Configuration cfg;
+        String instance;
 
         private List<Port> ports = new ArrayList<Port>();
 
@@ -143,6 +144,7 @@ public class JavaUdpPlugin extends NetworkPlugin {
             this.ctx = ctx;
             this.prot = prot;
             this.cfg = cfg;
+            this.instance = prot.getName();
         }
 
         private void addPort(Port p) {
@@ -166,6 +168,7 @@ public class JavaUdpPlugin extends NetworkPlugin {
                 addPort(tpm.p);
             }
             String template = ctx.getTemplateByID("templates/JavaUdpPlugin.java");
+            template = template.replace("/*$INSTANCE$*/", instance);
             template = template.replace("/*$SERIALIZER$*/", prot.getName() + "BinaryProtocol");
             StringBuilder parseBuilder = new StringBuilder();
             parseBuilder.append("final Event event = " + prot.getName() + "BinaryProtocol.instantiate(payload);\n");
@@ -181,7 +184,7 @@ public class JavaUdpPlugin extends NetworkPlugin {
             try {
                 final File folder = new File(ctx.getOutputDirectory() + "/src/main/java/org/thingml/generated/network");
                 folder.mkdir();
-                final File f = new File(ctx.getOutputDirectory() + "/src/main/java/org/thingml/generated/network/UdpJava.java");
+                final File f = new File(ctx.getOutputDirectory() + "/src/main/java/org/thingml/generated/network/UdpJava"+instance+".java");
                 final OutputStream output = new FileOutputStream(f);
                 IOUtils.write(template, output, Charset.forName("UTF-8"));
                 IOUtils.closeQuietly(output);
@@ -217,7 +220,7 @@ public class JavaUdpPlugin extends NetworkPlugin {
                 final String remoteAddress = AnnotatedElementHelper.hasAnnotation(conn.getProtocol(), "udp_remote_address") ? AnnotatedElementHelper.annotation(conn.getProtocol(), "udp_remote_address").get(0) : "???";
                 final String remotePort = AnnotatedElementHelper.hasAnnotation(conn.getProtocol(), "udp_remote_port") ? AnnotatedElementHelper.annotation(conn.getProtocol(), "udp_remote_port").get(0) : "???";
                 System.out.println("UdpPlugin found following annotations <"+localPort+"> <"+remoteAddress+"> <"+remotePort+">");
-                main = main.replace("/*$NETWORK$*/", "/*$NETWORK$*/\nUdpJava " + conn.getName() + "_" + conn.getProtocol().getName() + " = (UdpJava) new UdpJava(\"" + localPort + "\", \"" + remoteAddress + "\", \"" + remotePort + "\").buildBehavior(null, null);\n");
+                main = main.replace("/*$NETWORK$*/", "/*$NETWORK$*/\nUdpJava"+instance+" " + conn.getName() + "_" + conn.getProtocol().getName() + " = (UdpJava"+instance+") new UdpJava"+instance+"(\"" + localPort + "\", \"" + remoteAddress + "\", \"" + remotePort + "\").buildBehavior(null, null);\n");
 
                 StringBuilder connBuilder = new StringBuilder();
                 connBuilder.append(conn.getName() + "_" + conn.getProtocol().getName() + ".get" + ctx.firstToUpper(conn.getPort().getName()) + "_port().addListener(");

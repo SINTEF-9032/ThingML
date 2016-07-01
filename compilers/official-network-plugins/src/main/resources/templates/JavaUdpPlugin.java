@@ -12,7 +12,7 @@ import org.thingml.java.ext.*;
 
 import java.util.Arrays;
 
-public class UdpJava extends Component {
+public class UdpJava/*$INSTANCE$*/ extends Component {
 
     private int localPort = 0;
     private int remotePort = 0;
@@ -26,7 +26,7 @@ public class UdpJava extends Component {
 
     /*$PORTS$*/
 
-    public UdpJava(final String localPortString, final String remoteIpAddressString, final String remotePortString) {
+    public UdpJava/*$INSTANCE$*/(final String localPortString, final String remoteIpAddressString, final String remotePortString) {
         
         try {
             this.localPort = Integer.getInteger(localPortString);
