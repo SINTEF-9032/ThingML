@@ -1,4 +1,4 @@
-// SintefboardRcdTimerCommon.c *** Connect RCD timer to many Things .... sdalgard
+/* ******** Start of template RcdTimerCommon.c */
 //
 // Common methods for all RcdTimer instances
 
@@ -75,3 +75,4 @@ void /*CFG_CPPNAME_SCOPE*/rcd_timer_check(void){
 uint32_t /*CFG_CPPNAME_SCOPE*/rcd_timer_next(void){
     return rcd_timer_next_tick;
 }
+/* ******** End of template RcdTimerCommon.c */

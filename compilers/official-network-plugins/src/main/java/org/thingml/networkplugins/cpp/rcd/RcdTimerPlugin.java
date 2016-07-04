@@ -168,8 +168,8 @@ public class RcdTimerPlugin extends NetworkPlugin {
             ctemplate += "\n" + b;
             htemplate += "\n" + h;
 
-            ctx.getBuilder("zzz"+protocol.getName() + ".c").append(ctemplate); // Added zzz to be positioned late in header file
-            ctx.getBuilder("zzz"+protocol.getName() + ".h").append(htemplate); // Added zzz to have same name as the header file
+            ctx.getBuilder("|_LAST_"+protocol.getName() + ".c").append(ctemplate); // Added zzz to be positioned late in header file
+            ctx.getBuilder("|_LAST_"+protocol.getName() + ".h").append(htemplate); // Added zzz to have same name as the header file
             
             ctx.addToInitCode("\n" + portName + "_instance.listener_id = add_instance(&" + portName + "_instance);\n");
         }

@@ -334,8 +334,8 @@ public class RcdPortPlugin extends NetworkPlugin {
                 ctemplate += "\n" + b;
                 htemplate += "\n" + h;
 
-                ctx.getBuilder(protocol.getName() + ".c").append(ctemplate);
-                ctx.getBuilder(protocol.getName() + ".h").append(htemplate);
+                ctx.getBuilder("|_LAST_"+protocol.getName() + ".c").append(ctemplate);
+                ctx.getBuilder("|_LAST_"+protocol.getName() + ".h").append(htemplate);
 
                 ctx.addToInitCode("\n" + portName + "_instance.listener_id = add_instance(&" + portName + "_instance);\n");
 

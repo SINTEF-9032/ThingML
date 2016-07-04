@@ -1,4 +1,4 @@
-// RcdTimerCommon.h *** Connect RCD timer to many Things .... sdalgard
+/* ******** Start of template RcdTimerCommon.h */
 //
 
 // Common stuff for all RcdTimer instances
@@ -13,3 +13,4 @@ void rcd_timer_check(void);
 //void rcd_send_timeout(unsigned int id); This is generated in SintefboardRcdTimer.java
 //uint32_t rcd_timer_next(void); This is located in sintefboard_main_header.h
 
+/* ******** End of template RcdTimerCommon.h */

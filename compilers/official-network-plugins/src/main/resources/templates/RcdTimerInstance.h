@@ -1,4 +1,4 @@
-// RcdTimerInstance.h *** Connect RCD timer to many Things .... sdalgard
+/* ******** Start of template RcdTimerInstance.h */
 //
 
 // Place prototypes for /*PORT_NAME*/ here
@@ -10,3 +10,4 @@ struct /*PORT_NAME*/_instance_type {
     /*INSTANCE_INFORMATION*/
 } /*PORT_NAME*/_instance;
 
+/* ******** End of template RcdTimerInstance.h */
