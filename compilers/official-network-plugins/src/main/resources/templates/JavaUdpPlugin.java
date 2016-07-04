@@ -21,6 +21,8 @@ public class UdpJava/*$INSTANCE$*/ extends Component {
     private DatagramSocket udpSocket = null;
 
     private final byte[] START_SEQUENCE = {0x12, 0x14, 0x16, 0x18};
+    
+    private final String instName = "UdpJava/*$INSTANCE$*/: ";
 
     /*$MESSAGE TYPES$*/
 
@@ -29,22 +31,18 @@ public class UdpJava/*$INSTANCE$*/ extends Component {
     public UdpJava/*$INSTANCE$*/(final String localPortString, final String remoteIpAddressString, final String remotePortString) {
         
         try {
-            this.localPort = Integer.getInteger(localPortString);
-            this.remotePort = Integer.getInteger(remotePortString);
+            this.localPort = Integer.decode(localPortString);
+            this.remotePort = Integer.decode(remotePortString);
             this.remoteIpAddress = InetAddress.getByName(remoteIpAddressString);
-        } catch (Exception ex) {
-            System.out.println("Got exception: "+ex);
-            ex.printStackTrace();
-        }
-            
 
-        try {
-           this.udpSocket = new DatagramSocket(localPort);
+            this.udpSocket = new DatagramSocket(localPort);
            
-           new Thread(new UdpPortReader()).start();
+            new Thread(new UdpPortReader()).start();
            
-        } catch (SocketException ex) {
-            System.out.println("Got exception: "+ex);
+            System.out.println(instName +"Open socket from "+this.localPort+" to addr "+this.remoteIpAddress+":"+this.remotePort);
+            
+        } catch (Exception ex) {
+            System.out.println(instName +"Got exception: "+ex);
             ex.printStackTrace();
         }
     }
@@ -54,11 +52,17 @@ public class UdpJava/*$INSTANCE$*/ extends Component {
            byte[] sendData = new byte[START_SEQUENCE.length+payload.length];
            for (int i = 0; i < START_SEQUENCE.length; i++) sendData[i] = START_SEQUENCE[i];
            for (int i = 0; i < payload.length; i++) sendData[i + START_SEQUENCE.length] = payload[i];
+           
+           System.out.println(instName +"Sending packet len "+sendData.length+" to addr "+this.remoteIpAddress+":"+this.remotePort);
+           System.out.print("[");
+           for (int i = 0; i < sendData.length; i++) System.out.printf("%02X ", sendData[i]);
+           System.out.println("]");
+
            DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, this.remoteIpAddress, this.remotePort);
            this.udpSocket.send(sendPacket);
 
         } catch (Exception ex) {
-            System.out.println("Got exception: "+ex);
+            System.out.println(instName +"Got exception: "+ex);
             ex.printStackTrace();
         }
     }
@@ -72,6 +76,7 @@ public class UdpJava/*$INSTANCE$*/ extends Component {
         while (active) {
             try {
                 final Event e = queue.take();//should block if queue is empty, waiting for a message
+                System.out.println(instName +"Got evet: "+e);
                 final byte[] payload = /*$SERIALIZER$*/.toBytes(e);
                 if (payload != null)
                     send(payload);
@@ -91,16 +96,21 @@ public class UdpJava/*$INSTANCE$*/ extends Component {
 
         @Override
         public void run() {
-            try {
-                while (active) {
-                    // Wait for rx data
+            while (active) {
+                // Wait for rx data
+                try {
                     byte[] buf = new byte[256];
                     DatagramPacket packet = new DatagramPacket(buf, buf.length);
                     //this.udpSocket.setSoTimeout(1000);
                     udpSocket.receive(packet);
                     byte[] rxBufWithStart = packet.getData();
                     int rxLenWithStart = packet.getLength();
-                    System.out.println("UdpReceived: " + rxBufWithStart.length);
+
+                    System.out.println(instName +"Receiving packet len "+packet.getLength()+" from addr "+packet.getAddress()+":"+packet.getPort());
+                    System.out.print("[");
+                    for (int i = 0; i < packet.getLength(); i++) System.out.printf("%02X ", rxBufWithStart[i]);
+                    System.out.println("]");
+
                     if (rxLenWithStart > START_SEQUENCE.length) {
                         boolean matchStart = true;
                         for (int i = 0; i < START_SEQUENCE.length; i++) {
@@ -113,16 +123,15 @@ public class UdpJava/*$INSTANCE$*/ extends Component {
                             }
                             parse(rxBuf);
                         } else {
-                            System.out.println("UDP: Receiver mismatch in start sequence.");
+                            System.out.println(instName +"UDP: Receiver mismatch in start sequence.");
                         }
                     }
-                } 
-            } catch (IOException ex) {
-                System.out.println("Got exception: "+ex);
-                ex.printStackTrace();
-            } finally {
-                System.out.println("UDP: Receiver thread stopped.");
-            }
+                } catch (IOException ex) {
+                    System.out.println(instName +"Got exception: "+ex);
+                    ex.printStackTrace();
+                }
+            } 
+            System.out.println(instName +"UDP: Receiver thread stopped.");
         }
     }
 }
