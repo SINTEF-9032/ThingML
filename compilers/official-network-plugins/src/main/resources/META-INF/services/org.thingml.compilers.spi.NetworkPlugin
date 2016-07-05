@@ -1,10 +1,12 @@
 org.thingml.networkplugins.c.arduino.ArduinoSerialPlugin
 org.thingml.networkplugins.c.arduino.ArduinoTimerPlugin
+org.thingml.networkplugins.c.arduino.ESP8266UDPPlugin
 org.thingml.networkplugins.c.posix.PosixWebSocketPlugin
 org.thingml.networkplugins.c.posix.PosixMQTTPlugin
 org.thingml.networkplugins.c.posix.PosixNoPollWSPlugin
 org.thingml.networkplugins.c.posix.PosixSerialPlugin
 org.thingml.networkplugins.c.posix.PosixStdInPlugin
+org.thingml.networkplugins.c.posix.PosixUDPPlugin
 org.thingml.networkplugins.cpp.rcd.RcdPortPlugin
 org.thingml.networkplugins.cpp.rcd.RcdTimerPlugin
 org.thingml.networkplugins.java.JavaSerialPlugin

@@ -36,6 +36,8 @@ import java.util.HashMap;
  * Created by ffl on 01.06.15.
  */
 public abstract class CCompilerContext extends Context {
+    
+    public boolean staticLinking = false;
 
     public String instance_var_name = null;
     // Argh!!
@@ -50,7 +52,7 @@ public abstract class CCompilerContext extends Context {
     StringBuilder cppHeaderCode = new StringBuilder();
     private Set<NetworkLibraryGenerator> NetworkLibraryGenerators;
     private Map<String, Map<String, String>> mapCepMsgParamAndStream;
-
+    
     public CCompilerContext(ThingMLCompiler c) {
         super(c);
         NetworkLibraryGenerators = new HashSet<NetworkLibraryGenerator>();
@@ -624,6 +626,16 @@ public abstract class CCompilerContext extends Context {
         return result;
     }
 
+    public int getIgnoredParameterSerializationSize(Message m) {
+        int result = 0; 
+        for (Parameter p : m.getParameters()) {
+            if(AnnotatedElementHelper.isDefined(m, "do_not_forward", p.getName())) {
+                result += this.getCByteSize(p.getType(), 0);
+            }
+        }
+        return result;
+    }
+
     public String getMessageSerializationSizeString(Message m) {
         int result = 2; // 2 bytes to store the port/message code
         result += 2; // to store the id of the source instance
@@ -854,5 +866,17 @@ public abstract class CCompilerContext extends Context {
 
     public void resetCepMsgContext() {
         this.mapCepMsgParamAndStream = null;
+    }
+    
+    
+    boolean dynamic_array_usage = false;
+    
+    public void add_dynamic_array_lib() {
+        if(!dynamic_array_usage) {
+            dynamic_array_usage = true;
+            
+            getBuilder("dynamic_array.c").append(getTemplateByID("cutilities/dynamic_array.c"));
+            getBuilder("dynamic_array.h").append(getTemplateByID("cutilities/dynamic_array.h"));
+        }
     }
 }

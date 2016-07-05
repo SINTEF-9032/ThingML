@@ -428,4 +428,15 @@ public abstract class ThingMLCompiler {
     public SerializationPlugin getSerializationPlugin(String id) {
         return serializationPlugins.get(id);
     }
+    
+    public String getDockerBaseImage(Configuration cfg, Context ctx) {
+        return null;
+    }
+    public String getDockerCMD(Configuration cfg, Context ctx) {
+        return null;
+    }
+    
+    public String getDockerCfgRunPath(Configuration cfg, Context ctx) {
+        return null;
+    }
 }
