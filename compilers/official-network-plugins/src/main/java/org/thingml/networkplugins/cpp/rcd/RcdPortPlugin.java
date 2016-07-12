@@ -72,6 +72,16 @@ public class RcdPortPlugin extends NetworkPlugin {
         res.add("RcdPortTunnel_7");
         res.add("RcdPortTunnel_8");
         res.add("RcdPortTunnel_9");
+        res.add("RcdPortTunnelFlowContr_0");
+        res.add("RcdPortTunnelFlowContr_1");
+        res.add("RcdPortTunnelFlowContr_2");
+        res.add("RcdPortTunnelFlowContr_3");
+        res.add("RcdPortTunnelFlowContr_4");
+        res.add("RcdPortTunnelFlowContr_5");
+        res.add("RcdPortTunnelFlowContr_6");
+        res.add("RcdPortTunnelFlowContr_7");
+        res.add("RcdPortTunnelFlowContr_8");
+        res.add("RcdPortTunnelFlowContr_9");
         return res;
     }
 
@@ -242,15 +252,24 @@ public class RcdPortPlugin extends NetworkPlugin {
                     
                 } else {
                     // Serializing specified, create a rcd tunnel
-                    String i = sp.generateSerialization(builder, "forward_buf", m);
-                    String tunnel_msgid = AnnotatedElementHelper.annotation(prot, "rcdporttunnel_msgid").iterator().next();
-                    
-                    builder.append("msgc_t   msg_out;      // Outgoing message\n");
-                    builder.append("if( Ports_ptr->IsConnected(" + portnum + ") ) {\n");
-                    builder.append("APP_MSGC_comp_" + tunnel_msgid + "(&msg_out, forward_buf, " + i + ");\n");
-                    builder.append("Ports_ptr->SendMsgc(" + portnum + ", &msg_out);\n");
-                    builder.append("}\n");
+                    if (prot.getName().startsWith("RcdPortTunnelFlowContr")) {
+                        // Tunnel with flow control
+                        String i = sp.generateSerialization(builder, "forward_buf", m);
 
+                        builder.append("if( Ports_ptr->IsConnected(" + portnum + ") ) {\n");
+                        builder.append(prot.getName() + "put_into_tx_buf(forward_buf, " + i + ");\n");
+                        builder.append("}\n");
+                    } else {
+                        // Tunnel without flow control
+                        String i = sp.generateSerialization(builder, "forward_buf", m);
+                        String tunnel_msgid = AnnotatedElementHelper.annotation(prot, "rcdporttunnel_msgid").iterator().next();
+
+                        builder.append("msgc_t   msg_out;      // Outgoing message\n");
+                        builder.append("if( Ports_ptr->IsConnected(" + portnum + ") ) {\n");
+                        builder.append("APP_MSGC_comp_" + tunnel_msgid + "(&msg_out, forward_buf, " + i + ");\n");
+                        builder.append("Ports_ptr->SendMsgc(" + portnum + ", &msg_out);\n");
+                        builder.append("}\n");
+                    }
                 }
                 builder.append("}\n\n");
             }
@@ -304,7 +323,16 @@ public class RcdPortPlugin extends NetworkPlugin {
                 builder.append("uint8_t *rcv_buf_ptr;\n");
                 builder.append("uint8_t rcv_len;\n");
                 builder.append("APP_MSGC_decomp_" + tunnel_msgid + "(msg_in_ptr, &rcv_buf_ptr, &rcv_len);\n");
-                sp.generateParserBody(builder, "rcv_buf_ptr", "rcv_len", rcvMessages, portName + "_instance.listener_id");
+                
+                if (prot.getName().startsWith("RcdPortTunnelFlowContr")) {
+                    // Tunnel with flow control
+                    builder.append("if("+prot.getName()+"_receive_msg_or_ack( rcv_buf_ptr, rcv_len){\n");
+                    sp.generateParserBody(builder, "rcv_buf_ptr", "rcv_len", rcvMessages, portName + "_instance.listener_id");
+                    builder.append("}\n");
+                } else {
+                    // Tunnel without flow control
+                    sp.generateParserBody(builder, "rcv_buf_ptr", "rcv_len", rcvMessages, portName + "_instance.listener_id");
+                }
                 builder.append("}\n");
                 builder.append("break;\n");
                 
@@ -315,11 +343,25 @@ public class RcdPortPlugin extends NetworkPlugin {
         
         void generateNetworkLibrary(CCompilerContext ctx) {
             if (!ecos.isEmpty()) {
-                String ctemplate = ctx.getTemplateByID("templates/RcdPortForward.c");
-                String htemplate = ctx.getTemplateByID("templates/RcdPortForward.h");
-
+                String ctemplate;
+                String htemplate;
 
                 String portName = protocol.getName();
+                
+                if(portName.startsWith("RcdPortTunnelFlowContr")) {
+                    ctemplate = ctx.getTemplateByID("templates/RcdPortForwardFlowContr.c");
+                    htemplate = ctx.getTemplateByID("templates/RcdPortForwardFlowContr.h");
+                    
+                    String txBufSize = AnnotatedElementHelper.hasAnnotation(protocol, "tx_buf_size") ? AnnotatedElementHelper.annotation(protocol, "tx_buf_size").get(0) : "40";
+                    htemplate = htemplate.replace("/*TX_BUF_SIZE*/", txBufSize);
+                    String mtuSize = AnnotatedElementHelper.hasAnnotation(protocol, "mtu_size") ? AnnotatedElementHelper.annotation(protocol, "mtu_size").get(0) : "14";
+                    htemplate = htemplate.replace("/*MTU_SIZE*/", mtuSize);
+                    String timeoutMs = AnnotatedElementHelper.hasAnnotation(protocol, "timeout_ms") ? AnnotatedElementHelper.annotation(protocol, "timeout_ms").get(0) : "2000";
+                    htemplate = htemplate.replace("/*TIMEOUT_MS*/", timeoutMs);
+                } else {
+                    ctemplate = ctx.getTemplateByID("templates/RcdPortForward.c");
+                    htemplate = ctx.getTemplateByID("templates/RcdPortForward.h");
+                }
 
                 ctemplate = ctemplate.replace("/*PORT_NAME*/", portName);
                 htemplate = htemplate.replace("/*PORT_NAME*/", portName);
