@@ -104,18 +104,22 @@ public class CByteArraySerializerPlugin extends SerializationPlugin {
     public void generateParserBody(StringBuilder builder, String bufferName, String bufferSizeName, Set<Message> messages, String sender) {
         if(!messages.isEmpty()) {
             builder.append("if ((" + bufferSizeName + " >= 2) && ("+bufferName+" != NULL)) {\n");
-            builder.append("uint8_t new_buf[" + bufferSizeName + "];\n");
-            builder.append("new_buf[0] = "+bufferName+"[0];\n");
-            builder.append("new_buf[1] = "+bufferName+"[1];\n");
-            builder.append("uint8_t msgSizeOK = 0;\n");
+            //builder.append("uint8_t new_buf[" + bufferSizeName + "];\n"); Variable len array is not supported in C99
+            //builder.append("new_buf[0] = "+bufferName+"[0];\n");
+            //builder.append("new_buf[1] = "+bufferName+"[1];\n");
+            //builder.append("uint8_t msgSizeOK = 0;\n");
             builder.append("switch("+bufferName+"[0] * 256 + "+bufferName+"[1]) {\n");
             for (Message m : messages) {
+                int expectedSize = cctx.getMessageSerializationSize(m) - 2;
                 builder.append("case ");
                 builder.append(cctx.getHandlerCode(m));
                 builder.append(":\n");
                 builder.append("if(" + bufferSizeName + " == ");
-                builder.append(cctx.getMessageSerializationSize(m) - 2);
+                builder.append(expectedSize);
                 builder.append(") {\n");
+                builder.append("uint8_t new_buf[" + expectedSize + "];\n");
+                builder.append("new_buf[0] = "+bufferName+"[0];\n");
+                builder.append("new_buf[1] = "+bufferName+"[1];\n");
                 
                 int idx_bis = 2;
 
@@ -130,7 +134,7 @@ public class CByteArraySerializerPlugin extends SerializationPlugin {
                     idx_bis = idx_bis + cctx.getCByteSize(pt.getType(), 0);
                 }
                 
-                builder.append("externalMessageEnqueue((uint8_t *) new_buf, " + bufferSizeName + ", " + sender + ");\n");
+                builder.append("externalMessageEnqueue((uint8_t *) new_buf, " + expectedSize + ", " + sender + ");\n");
                 builder.append("}\n");
                 builder.append("break;\n");
             }

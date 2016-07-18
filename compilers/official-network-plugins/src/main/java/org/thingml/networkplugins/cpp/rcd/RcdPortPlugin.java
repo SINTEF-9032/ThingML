@@ -72,16 +72,6 @@ public class RcdPortPlugin extends NetworkPlugin {
         res.add("RcdPortTunnel_7");
         res.add("RcdPortTunnel_8");
         res.add("RcdPortTunnel_9");
-        res.add("RcdPortTunnelFlowContr_0");
-        res.add("RcdPortTunnelFlowContr_1");
-        res.add("RcdPortTunnelFlowContr_2");
-        res.add("RcdPortTunnelFlowContr_3");
-        res.add("RcdPortTunnelFlowContr_4");
-        res.add("RcdPortTunnelFlowContr_5");
-        res.add("RcdPortTunnelFlowContr_6");
-        res.add("RcdPortTunnelFlowContr_7");
-        res.add("RcdPortTunnelFlowContr_8");
-        res.add("RcdPortTunnelFlowContr_9");
         return res;
     }
 
@@ -209,6 +199,16 @@ public class RcdPortPlugin extends NetworkPlugin {
             return ret;
         }
         
+        public String getTransportProt() {
+            String ret = "none";
+            
+            if (AnnotatedElementHelper.hasAnnotation(protocol, "transport_prot")) {
+                ret = AnnotatedElementHelper.annotation(protocol, "transport_prot").iterator().next();
+            }
+            ret = ret.toLowerCase();
+            return ret;
+        }
+        
         public void printPortInfo(int i, Port p) {
             System.out.print("RcdPort("+i+") "+ protocol.getName() +" is connected to port "+ p.getName()+ " ");
             if (p instanceof RequiredPort) {
@@ -220,24 +220,24 @@ public class RcdPortPlugin extends NetworkPlugin {
             System.out.println();
         }
         
-        public void generateMessageForwarders(StringBuilder builder, StringBuilder headerbuilder, Protocol prot) {
-            for (ThingPortMessage tpm : getMessagesSent(cfg, prot)) {
+        public void generateMessageForwarders(StringBuilder builder, StringBuilder headerbuilder) {
+            for (ThingPortMessage tpm : getMessagesSent(cfg, protocol)) {
                 Thing t = tpm.t;
                 Port p = tpm.p;
                 Message m = tpm.m;
                 
 
-                headerbuilder.append("// Forwarding of messages " + prot.getName() + "::" + t.getName() + "::" + p.getName() + "::" + m.getName() + "\n");
-                headerbuilder.append("void " + "forward_" + prot.getName() + "_" + ctx.getSenderName(t, p, m));
+                headerbuilder.append("// Forwarding of messages " + protocol.getName() + "::" + t.getName() + "::" + p.getName() + "::" + m.getName() + "\n");
+                headerbuilder.append("void " + "forward_" + protocol.getName() + "_" + ctx.getSenderName(t, p, m));
                 ctx.appendFormalParameters(t, headerbuilder, m);
                 headerbuilder.append(";\n");
 
-                builder.append("// Forwarding of messages " + prot.getName() + "::" + t.getName() + "::" + p.getName() + "::" + m.getName() + "\n");
-                builder.append("void " + getCppNameScope() + "forward_" + prot.getName() + "_" + ctx.getSenderName(t, p, m));
+                builder.append("// Forwarding of messages " + protocol.getName() + "::" + t.getName() + "::" + p.getName() + "::" + m.getName() + "\n");
+                builder.append("void " + getCppNameScope() + "forward_" + protocol.getName() + "_" + ctx.getSenderName(t, p, m));
                 ctx.appendFormalParameters(t, builder, m);
                 builder.append("{\n");
 
-                String portnum = AnnotatedElementHelper.annotation(prot, "rcdport_number").iterator().next();
+                String portnum = AnnotatedElementHelper.annotation(protocol, "rcdport_number").iterator().next();
 
                 List<String> formats = sp.getSupportedFormat();
                 if (formats.get(0).contentEquals("None")) {
@@ -252,30 +252,14 @@ public class RcdPortPlugin extends NetworkPlugin {
                     
                 } else {
                     // Serializing specified, create a rcd tunnel
-                    if (prot.getName().startsWith("RcdPortTunnelFlowContr")) {
-                        // Tunnel with flow control
-                        String i = sp.generateSerialization(builder, "forward_buf", m);
-
-                        builder.append("if( Ports_ptr->IsConnected(" + portnum + ") ) {\n");
-                        builder.append(prot.getName() + "put_into_tx_buf(forward_buf, " + i + ");\n");
-                        builder.append("}\n");
-                    } else {
-                        // Tunnel without flow control
-                        String i = sp.generateSerialization(builder, "forward_buf", m);
-                        String tunnel_msgid = AnnotatedElementHelper.annotation(prot, "rcdporttunnel_msgid").iterator().next();
-
-                        builder.append("msgc_t   msg_out;      // Outgoing message\n");
-                        builder.append("if( Ports_ptr->IsConnected(" + portnum + ") ) {\n");
-                        builder.append("APP_MSGC_comp_" + tunnel_msgid + "(&msg_out, forward_buf, " + i + ");\n");
-                        builder.append("Ports_ptr->SendMsgc(" + portnum + ", &msg_out);\n");
-                        builder.append("}\n");
-                    }
+                    String i = sp.generateSerialization(builder, "forward_buf", m);
+                    builder.append("to_transport_" + protocol.getName() + "(forward_buf, " + i + ");\n");
                 }
                 builder.append("}\n\n");
             }
         }
 
-        public void generatePortDeserializer(StringBuilder builder, StringBuilder headerbuilder, Protocol prot) {
+        public void generatePortDeserializer(StringBuilder builder, StringBuilder headerbuilder) {
             
             String portName = protocol.getName();
             
@@ -311,34 +295,76 @@ public class RcdPortPlugin extends NetworkPlugin {
                 }
             } else {
                 // Serializing specified, create a rcd tunnel
-                Set<Message> rcvMessages = new HashSet();
-                for (ThingPortMessage tpm : getMessagesReceived(cfg, protocol)) {
-                    Message m = tpm.m;
-                    rcvMessages.add(m);
-                }                
                 
-                String tunnel_msgid = AnnotatedElementHelper.annotation(prot, "rcdporttunnel_msgid").iterator().next();
+                String tunnel_msgid = AnnotatedElementHelper.annotation(protocol, "rcdporttunnel_msgid").iterator().next();
                 builder.append("case " + tunnel_msgid + ":\n");
                 builder.append("{\n");
                 builder.append("uint8_t *rcv_buf_ptr;\n");
                 builder.append("uint8_t rcv_len;\n");
                 builder.append("APP_MSGC_decomp_" + tunnel_msgid + "(msg_in_ptr, &rcv_buf_ptr, &rcv_len);\n");
+
+                builder.append("from_link_" + protocol.getName() + "(rcv_buf_ptr, rcv_len);\n");
                 
-                if (prot.getName().startsWith("RcdPortTunnelFlowContr")) {
-                    // Tunnel with flow control
-                    builder.append("if("+prot.getName()+"_receive_msg_or_ack( rcv_buf_ptr, rcv_len){\n");
-                    sp.generateParserBody(builder, "rcv_buf_ptr", "rcv_len", rcvMessages, portName + "_instance.listener_id");
-                    builder.append("}\n");
-                } else {
-                    // Tunnel without flow control
-                    sp.generateParserBody(builder, "rcv_buf_ptr", "rcv_len", rcvMessages, portName + "_instance.listener_id");
-                }
                 builder.append("}\n");
                 builder.append("break;\n");
                 
             }
             builder.append("} // switch MsgId \n");
             builder.append("}\n\n");
+        }
+        
+        public void generateToLinkFunction(StringBuilder builder, StringBuilder headerbuilder) {
+            
+            String portName = protocol.getName();
+
+            List<String> formats = sp.getSupportedFormat();
+            if (formats.get(0).contentEquals("None")) {
+                // No serializing, no need for to_link function
+            } else {
+                // Serializing specified, create to_link function
+                String portnum = AnnotatedElementHelper.annotation(protocol, "rcdport_number").iterator().next();
+                String tunnel_msgid = AnnotatedElementHelper.annotation(protocol, "rcdporttunnel_msgid").iterator().next();
+            
+                headerbuilder.append("void to_link_" + portName + "( uint8_t *buf_ptr, uint8_t buf_len);\n");
+
+                builder.append("void " + getCppNameScope() + "to_link_" + portName + "( uint8_t *buf_ptr, uint8_t buf_len) {\n");
+                builder.append("msgc_t   msg_out;      // Outgoing message\n");
+                builder.append("if( Ports_ptr->IsConnected(" + portnum + ") ) {\n");
+                builder.append("APP_MSGC_comp_" + tunnel_msgid + "(&msg_out, buf_ptr, buf_len);\n");
+                builder.append("Ports_ptr->SendMsgc(" + portnum + ", &msg_out);\n");
+                builder.append("}\n");
+                builder.append("}\n\n");
+            }
+        }
+        
+        public void generateFromTransportFunction(StringBuilder builder, StringBuilder headerbuilder) {
+            
+            String portName = protocol.getName();
+
+            List<String> formats = sp.getSupportedFormat();
+            if (formats.get(0).contentEquals("None")) {
+                // No serializing, no need for from_transport function
+            } else {
+                // Serializing specified, create from_transport function
+                Set<Message> rcvMessages = new HashSet();
+                for (ThingPortMessage tpm : getMessagesReceived(cfg, protocol)) {
+                    Message m = tpm.m;
+                    rcvMessages.add(m);
+                }                
+            
+                headerbuilder.append("void from_transport_" + portName + "( uint8_t *buf_ptr, uint8_t buf_len);\n");
+
+                builder.append("void " + getCppNameScope() + "from_transport_" + portName + "( uint8_t *buf_ptr, uint8_t buf_len) {\n");
+                sp.generateParserBody(builder, "buf_ptr", "buf_len", rcvMessages, portName + "_instance.listener_id");
+                builder.append("}\n\n");
+            }
+        }
+        
+        public String getSection(String source_string, String start_string, String end_string) {
+            int startIdx = source_string.indexOf(start_string);
+            int endIdx = source_string.lastIndexOf(end_string) + end_string.length();
+            String ret = source_string.substring(startIdx, endIdx);
+            return ret;
         }
         
         void generateNetworkLibrary(CCompilerContext ctx) {
@@ -348,9 +374,28 @@ public class RcdPortPlugin extends NetworkPlugin {
 
                 String portName = protocol.getName();
                 
-                if(portName.startsWith("RcdPortTunnelFlowContr")) {
-                    ctemplate = ctx.getTemplateByID("templates/RcdPortForwardFlowContr.c");
-                    htemplate = ctx.getTemplateByID("templates/RcdPortForwardFlowContr.h");
+                List<String> formats = sp.getSupportedFormat();
+                if (formats.get(0).contentEquals("None")) {
+                    ctemplate = ctx.getTemplateByID("templates/RcdPortForward.c");
+                    htemplate = ctx.getTemplateByID("templates/RcdPortForward.h");
+                } else {
+                    ctemplate = ctx.getTemplateByID("templates/RcdPortForward.c");
+                    htemplate = ctx.getTemplateByID("templates/RcdPortForward.h");
+                    
+                    String ctemplateTransport = ctx.getTemplateByID("templates/RcdPortTransportNone.c");
+                    String htemplateTransport = ctx.getTemplateByID("templates/RcdPortTransportNone.h");
+
+                    String transportPort = getTransportProt();
+                    if( transportPort.contentEquals("ack")) {
+                        ctemplateTransport = ctx.getTemplateByID("templates/RcdPortTransportAck.c");
+                        htemplateTransport = ctx.getTemplateByID("templates/RcdPortTransportAck.h");
+                    }
+                    
+                    // Merge transport into base template
+                    ctemplate = ctemplate.replace("/*TRANSPORT_FUNCTIONS*/", ctemplateTransport);
+                    
+                    htemplate = htemplate.replace("/*TRANSPORT_INFORMATION*/", getSection(htemplateTransport, "/*TRANSPORT_INFO_START*/", "/*TRANSPORT_INFO_END*/"));
+                    htemplate = htemplate.replace("/*TRANSPORT_PROTOTYPES*/", getSection(htemplateTransport, "/*TRANSPORT_PROTO_START*/", "/*TRANSPORT_PROTO_END*/"));
                     
                     String txBufSize = AnnotatedElementHelper.hasAnnotation(protocol, "tx_buf_size") ? AnnotatedElementHelper.annotation(protocol, "tx_buf_size").get(0) : "40";
                     htemplate = htemplate.replace("/*TX_BUF_SIZE*/", txBufSize);
@@ -358,10 +403,7 @@ public class RcdPortPlugin extends NetworkPlugin {
                     htemplate = htemplate.replace("/*MTU_SIZE*/", mtuSize);
                     String timeoutMs = AnnotatedElementHelper.hasAnnotation(protocol, "timeout_ms") ? AnnotatedElementHelper.annotation(protocol, "timeout_ms").get(0) : "2000";
                     htemplate = htemplate.replace("/*TIMEOUT_MS*/", timeoutMs);
-                } else {
-                    ctemplate = ctx.getTemplateByID("templates/RcdPortForward.c");
-                    htemplate = ctx.getTemplateByID("templates/RcdPortForward.h");
-                }
+                }                
 
                 ctemplate = ctemplate.replace("/*PORT_NAME*/", portName);
                 htemplate = htemplate.replace("/*PORT_NAME*/", portName);
@@ -369,9 +411,13 @@ public class RcdPortPlugin extends NetworkPlugin {
                 StringBuilder b = new StringBuilder();
                 StringBuilder h = new StringBuilder();
                 
-                generatePortDeserializer(b, h, protocol);
+                generatePortDeserializer(b, h);
+
+                generateToLinkFunction(b, h);
                 
-                generateMessageForwarders(b, h, protocol);
+                generateFromTransportFunction(b, h);
+                
+                generateMessageForwarders(b, h);
 
                 ctemplate += "\n" + b;
                 htemplate += "\n" + h;
