@@ -119,7 +119,7 @@ public class RcdPortPlugin extends NetworkPlugin {
                 }
                 port.generateNetworkLibrary(this.ctx);
 
-                String portnum = AnnotatedElementHelper.annotation(prot, "rcdport_number").iterator().next();
+                String portnum = port.getPortNumber();
                 String portName = prot.getName();
                 builder.append("// "+portName+" portnum is() " + portnum + "\n");
                 builder.append("case " + portnum + ":\n");
@@ -146,18 +146,18 @@ public class RcdPortPlugin extends NetworkPlugin {
     }
     
     private void generatePortInfo() {
-        StringBuilder rcdportinfoBbuilder = new StringBuilder();
+        StringBuilder rcdportinfoBuilder = new StringBuilder();
         
-        rcdportinfoBbuilder.append("#define NUM_OF_PORTS_IN_TASK "+rcdPorts.size()+"\n\n");  
-        rcdportinfoBbuilder.append("const static port_info_entry_t _class_port_info[] = {\n");  
+        rcdportinfoBuilder.append("#define NUM_OF_PORTS_IN_TASK "+rcdPorts.size()+"\n\n");  
+        rcdportinfoBuilder.append("const static port_info_entry_t _class_port_info[] = {\n");  
 
         for (RcdPort port : rcdPorts) {
-            rcdportinfoBbuilder.append("{"+port.getPortNumber()+", "+port.getPortRole()+", \""+port.getPortName()+"\"},\n");  
+            rcdportinfoBuilder.append("{"+port.getPortNumber()+", "+port.getPortRole()+", \""+port.getPortName()+"\"},\n");  
         }
-        rcdportinfoBbuilder.append("{-1, PORT_END, \"\"},\n");
-        rcdportinfoBbuilder.append("};\n");  
+        rcdportinfoBuilder.append("{-1, PORT_END, \"\"},\n");
+        rcdportinfoBuilder.append("};\n");  
 
-        ctx.getBuilder("rcdportinfo").append(rcdportinfoBbuilder.toString());
+        ctx.getBuilder("rcdportinfo").append(rcdportinfoBuilder.toString());
     }
 
     private class RcdPort {
@@ -199,13 +199,36 @@ public class RcdPortPlugin extends NetworkPlugin {
             return ret;
         }
         
-        public String getTransportProt() {
+        public String getPortTunnelMsgidName() {
+            String ret = AnnotatedElementHelper.annotation(protocol, "rcdport_tunnel_msgid").iterator().next();
+            return ret;
+        }
+        
+        public String getShimName() {
             String ret = "none";
             
-            if (AnnotatedElementHelper.hasAnnotation(protocol, "transport_prot")) {
-                ret = AnnotatedElementHelper.annotation(protocol, "transport_prot").iterator().next();
+            if (AnnotatedElementHelper.hasAnnotation(protocol, "shim_name")) {
+                ret = AnnotatedElementHelper.annotation(protocol, "shim_name").iterator().next();
             }
             ret = ret.toLowerCase();
+            return ret;
+        }
+        
+        public boolean noSerializing() {
+            List<String> formats = sp.getSupportedFormat();
+            boolean ret = formats.get(0).contentEquals("None");
+            
+            return ret;
+        }
+        
+        public boolean useShim() {
+            boolean ret = false;
+            
+            if (getShimName().contentEquals("none")) {
+                ret = false;
+            } else {
+                ret = true;
+            }
             return ret;
         }
         
@@ -237,10 +260,9 @@ public class RcdPortPlugin extends NetworkPlugin {
                 ctx.appendFormalParameters(t, builder, m);
                 builder.append("{\n");
 
-                String portnum = AnnotatedElementHelper.annotation(protocol, "rcdport_number").iterator().next();
+                String portnum = getPortNumber();
 
-                List<String> formats = sp.getSupportedFormat();
-                if (formats.get(0).contentEquals("None")) {
+                if (noSerializing()) {
                     // No serializing, just map ThingML message to Rcd message
                     String msgid = AnnotatedElementHelper.annotation(m, "rcdport_msgid").iterator().next();
 
@@ -253,7 +275,12 @@ public class RcdPortPlugin extends NetworkPlugin {
                 } else {
                     // Serializing specified, create a rcd tunnel
                     String i = sp.generateSerialization(builder, "forward_buf", m);
-                    builder.append("to_transport_" + protocol.getName() + "(forward_buf, " + i + ");\n");
+                    if(useShim()) {
+                        builder.append("to_shim_" + protocol.getName() + "(forward_buf, " + i + ");\n");
+                    } else {
+                        // Bypass the shim section
+                        builder.append("to_transport_" + protocol.getName() + "(forward_buf, " + i + ");\n");
+                    }
                 }
                 builder.append("}\n\n");
             }
@@ -268,8 +295,7 @@ public class RcdPortPlugin extends NetworkPlugin {
             builder.append("void " + getCppNameScope() + " " + portName + "_parser(msgc_t *msg_in_ptr) {\n");
             builder.append("switch (msg_in_ptr->MsgId) {\n");
             
-            List<String> formats = sp.getSupportedFormat();
-            if (formats.get(0).contentEquals("None")) {
+            if (noSerializing()) {
                 // No serializing, just map ThingML message to Rcd message
                 
                 for (ThingPortMessage tpm : getMessagesReceived(cfg, protocol)) {
@@ -296,14 +322,19 @@ public class RcdPortPlugin extends NetworkPlugin {
             } else {
                 // Serializing specified, create a rcd tunnel
                 
-                String tunnel_msgid = AnnotatedElementHelper.annotation(protocol, "rcdporttunnel_msgid").iterator().next();
+                String tunnel_msgid = getPortTunnelMsgidName();
                 builder.append("case " + tunnel_msgid + ":\n");
                 builder.append("{\n");
                 builder.append("uint8_t *rcv_buf_ptr;\n");
                 builder.append("uint8_t rcv_len;\n");
                 builder.append("APP_MSGC_decomp_" + tunnel_msgid + "(msg_in_ptr, &rcv_buf_ptr, &rcv_len);\n");
 
-                builder.append("from_link_" + protocol.getName() + "(rcv_buf_ptr, rcv_len);\n");
+                if(useShim()) {
+                    builder.append("from_transport_" + protocol.getName() + "(rcv_buf_ptr, rcv_len);\n");
+                } else {
+                    // Bypass the shim section
+                    builder.append("from_shim_" + protocol.getName() + "(rcv_buf_ptr, rcv_len);\n");
+                }
                 
                 builder.append("}\n");
                 builder.append("break;\n");
@@ -313,21 +344,20 @@ public class RcdPortPlugin extends NetworkPlugin {
             builder.append("}\n\n");
         }
         
-        public void generateToLinkFunction(StringBuilder builder, StringBuilder headerbuilder) {
+        public void generateToTransportFunction(StringBuilder builder, StringBuilder headerbuilder) {
             
             String portName = protocol.getName();
 
-            List<String> formats = sp.getSupportedFormat();
-            if (formats.get(0).contentEquals("None")) {
-                // No serializing, no need for to_link function
+            if (noSerializing()) {
+                // No serializing, no need for to_transport function
             } else {
-                // Serializing specified, create to_link function
-                String portnum = AnnotatedElementHelper.annotation(protocol, "rcdport_number").iterator().next();
-                String tunnel_msgid = AnnotatedElementHelper.annotation(protocol, "rcdporttunnel_msgid").iterator().next();
+                // Serializing specified, create to_transport function
+                String portnum = getPortNumber();
+                String tunnel_msgid = getPortTunnelMsgidName();
             
-                headerbuilder.append("void to_link_" + portName + "( uint8_t *buf_ptr, uint8_t buf_len);\n");
+                headerbuilder.append("void to_transport_" + portName + "( uint8_t *buf_ptr, uint8_t buf_len);\n");
 
-                builder.append("void " + getCppNameScope() + "to_link_" + portName + "( uint8_t *buf_ptr, uint8_t buf_len) {\n");
+                builder.append("void " + getCppNameScope() + "to_transport_" + portName + "( uint8_t *buf_ptr, uint8_t buf_len) {\n");
                 builder.append("msgc_t   msg_out;      // Outgoing message\n");
                 builder.append("if( Ports_ptr->IsConnected(" + portnum + ") ) {\n");
                 builder.append("APP_MSGC_comp_" + tunnel_msgid + "(&msg_out, buf_ptr, buf_len);\n");
@@ -337,24 +367,23 @@ public class RcdPortPlugin extends NetworkPlugin {
             }
         }
         
-        public void generateFromTransportFunction(StringBuilder builder, StringBuilder headerbuilder) {
+        public void generateFromShimFunction(StringBuilder builder, StringBuilder headerbuilder) {
             
             String portName = protocol.getName();
 
-            List<String> formats = sp.getSupportedFormat();
-            if (formats.get(0).contentEquals("None")) {
-                // No serializing, no need for from_transport function
+            if (noSerializing()) {
+                // No serializing, no need for from_shim function
             } else {
-                // Serializing specified, create from_transport function
+                // Serializing specified, create from_shim function
                 Set<Message> rcvMessages = new HashSet();
                 for (ThingPortMessage tpm : getMessagesReceived(cfg, protocol)) {
                     Message m = tpm.m;
                     rcvMessages.add(m);
                 }                
             
-                headerbuilder.append("void from_transport_" + portName + "( uint8_t *buf_ptr, uint8_t buf_len);\n");
+                headerbuilder.append("void from_shim_" + portName + "( uint8_t *buf_ptr, uint8_t buf_len);\n");
 
-                builder.append("void " + getCppNameScope() + "from_transport_" + portName + "( uint8_t *buf_ptr, uint8_t buf_len) {\n");
+                builder.append("void " + getCppNameScope() + "from_shim_" + portName + "( uint8_t *buf_ptr, uint8_t buf_len) {\n");
                 sp.generateParserBody(builder, "buf_ptr", "buf_len", rcvMessages, portName + "_instance.listener_id");
                 builder.append("}\n\n");
             }
@@ -369,41 +398,42 @@ public class RcdPortPlugin extends NetworkPlugin {
         
         void generateNetworkLibrary(CCompilerContext ctx) {
             if (!ecos.isEmpty()) {
-                String ctemplate;
-                String htemplate;
+                String ctemplate = ctx.getTemplateByID("templates/RcdPortForward.c");
+                String htemplate = ctx.getTemplateByID("templates/RcdPortForward.h");
 
                 String portName = protocol.getName();
                 
-                List<String> formats = sp.getSupportedFormat();
-                if (formats.get(0).contentEquals("None")) {
-                    ctemplate = ctx.getTemplateByID("templates/RcdPortForward.c");
-                    htemplate = ctx.getTemplateByID("templates/RcdPortForward.h");
-                } else {
-                    ctemplate = ctx.getTemplateByID("templates/RcdPortForward.c");
-                    htemplate = ctx.getTemplateByID("templates/RcdPortForward.h");
-                    
-                    String ctemplateTransport = ctx.getTemplateByID("templates/RcdPortTransportNone.c");
-                    String htemplateTransport = ctx.getTemplateByID("templates/RcdPortTransportNone.h");
+                if (useShim()) {
+                    String ctemplateTransport = ctx.getTemplateByID("templates/RcdPortShimNone.c");
+                    String htemplateTransport = ctx.getTemplateByID("templates/RcdPortShimNone.h");
 
-                    String transportPort = getTransportProt();
-                    if( transportPort.contentEquals("ack")) {
-                        ctemplateTransport = ctx.getTemplateByID("templates/RcdPortTransportAck.c");
-                        htemplateTransport = ctx.getTemplateByID("templates/RcdPortTransportAck.h");
+                    String shimName = getShimName();
+                    System.out.println("Protocol " + portName + " using shim(" + shimName + ")");
+                    if( shimName.contentEquals("ack")) {
+                        ctemplateTransport = ctx.getTemplateByID("templates/RcdPortShimAck.c");
+                        htemplateTransport = ctx.getTemplateByID("templates/RcdPortShimAck.h");
                     }
                     
                     // Merge transport into base template
-                    ctemplate = ctemplate.replace("/*TRANSPORT_FUNCTIONS*/", ctemplateTransport);
+                    ctemplate = ctemplate.replace("/*SHIM_FUNCTIONS*/", ctemplateTransport);
                     
-                    htemplate = htemplate.replace("/*TRANSPORT_INFORMATION*/", getSection(htemplateTransport, "/*TRANSPORT_INFO_START*/", "/*TRANSPORT_INFO_END*/"));
-                    htemplate = htemplate.replace("/*TRANSPORT_PROTOTYPES*/", getSection(htemplateTransport, "/*TRANSPORT_PROTO_START*/", "/*TRANSPORT_PROTO_END*/"));
+                    htemplate = htemplate.replace("/*SHIM_INFORMATION*/", getSection(htemplateTransport, "/*SHIM_INFO_START*/", "/*SHIM_INFO_END*/"));
+                    htemplate = htemplate.replace("/*SHIM_PROTOTYPES*/", getSection(htemplateTransport, "/*SHIM_PROTO_START*/", "/*SHIM_PROTO_END*/"));
                     
-                    String txBufSize = AnnotatedElementHelper.hasAnnotation(protocol, "tx_buf_size") ? AnnotatedElementHelper.annotation(protocol, "tx_buf_size").get(0) : "40";
+                    String txBufSize = AnnotatedElementHelper.hasAnnotation(protocol, "shim_tx_buf_size") ? AnnotatedElementHelper.annotation(protocol, "shim_tx_buf_size").get(0) : "40";
                     htemplate = htemplate.replace("/*TX_BUF_SIZE*/", txBufSize);
-                    String mtuSize = AnnotatedElementHelper.hasAnnotation(protocol, "mtu_size") ? AnnotatedElementHelper.annotation(protocol, "mtu_size").get(0) : "14";
+                    System.out.println("Protocol " + portName + " using annontation shim_tx_buf_size(" + txBufSize + ")");
+                    String mtuSize = AnnotatedElementHelper.hasAnnotation(protocol, "shim_mtu_size") ? AnnotatedElementHelper.annotation(protocol, "shim_mtu_size").get(0) : "14";
                     htemplate = htemplate.replace("/*MTU_SIZE*/", mtuSize);
-                    String timeoutMs = AnnotatedElementHelper.hasAnnotation(protocol, "timeout_ms") ? AnnotatedElementHelper.annotation(protocol, "timeout_ms").get(0) : "2000";
+                    System.out.println("Protocol " + portName + " using annontation shim_mtu_size(" + mtuSize + ")");
+                    String timeoutMs = AnnotatedElementHelper.hasAnnotation(protocol, "shim_timeout_ms") ? AnnotatedElementHelper.annotation(protocol, "shim_timeout_ms").get(0) : "2000";
                     htemplate = htemplate.replace("/*TIMEOUT_MS*/", timeoutMs);
-                }                
+                    System.out.println("Protocol " + portName + " using annontation shim_timeout_ms(" + timeoutMs + ")");
+                } else {
+                    if (!noSerializing()) {
+                        System.out.println("Protocol " + portName + " no shim specified");
+                    }
+                }
 
                 ctemplate = ctemplate.replace("/*PORT_NAME*/", portName);
                 htemplate = htemplate.replace("/*PORT_NAME*/", portName);
@@ -413,9 +443,9 @@ public class RcdPortPlugin extends NetworkPlugin {
                 
                 generatePortDeserializer(b, h);
 
-                generateToLinkFunction(b, h);
+                generateToTransportFunction(b, h);
                 
-                generateFromTransportFunction(b, h);
+                generateFromShimFunction(b, h);
                 
                 generateMessageForwarders(b, h);
 

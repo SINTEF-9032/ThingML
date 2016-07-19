@@ -73,7 +73,7 @@ public class RcdTimerPlugin extends NetworkPlugin {
         this.ctx = (CCompilerContext) ctx;
         rcdTimers = new HashSet<RcdTimer>();
         
-        System.out.println("RcdTimerPlugin.generateNetworkLibrary() " + protocols);
+        //System.out.println("RcdTimerPlugin.generateNetworkLibrary() " + protocols);
         if (!protocols.isEmpty()) {
             
             ctx.getBuilder("hashdefines").append("#define RCDTIMER_IN_USE\n");

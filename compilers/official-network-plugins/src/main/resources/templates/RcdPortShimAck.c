@@ -1,6 +1,6 @@
-/* ******** Start of template RcdPortTransportAck.c */
+/* ******** Start of template RcdPortShimAck.c */
 
-void /*CFG_CPPNAME_SCOPE*/to_transport_/*PORT_NAME*/( uint8_t *buf_ptr, uint8_t buf_len){
+void /*CFG_CPPNAME_SCOPE*/to_shim_/*PORT_NAME*/( uint8_t *buf_ptr, uint8_t buf_len){
     uint16_t wr_idx = /*PORT_NAME*/_instance.tx_buf_wr_idx;
     uint16_t rd_idx = /*PORT_NAME*/_instance.tx_buf_rd_idx;
     uint8_t *tx_buf_ptr =  /*PORT_NAME*/_instance.tx_buf;
@@ -32,7 +32,7 @@ void /*CFG_CPPNAME_SCOPE*/to_transport_/*PORT_NAME*/( uint8_t *buf_ptr, uint8_t 
     }
 }
 
-void /*CFG_CPPNAME_SCOPE*/from_link_/*PORT_NAME*/( uint8_t *rcv_buf_ptr, uint8_t rcv_len){
+void /*CFG_CPPNAME_SCOPE*/from_transport_/*PORT_NAME*/( uint8_t *rcv_buf_ptr, uint8_t rcv_len){
 
     uint8_t rx_seq_num = rcv_buf_ptr[0];
     if(rcv_len == 1) {
@@ -53,11 +53,11 @@ void /*CFG_CPPNAME_SCOPE*/from_link_/*PORT_NAME*/( uint8_t *rcv_buf_ptr, uint8_t
         // Send ACK to remote ...
         byte tmp_buf[1];
         tmp_buf[0] = rx_seq_num;
-        to_link_/*PORT_NAME*/( tmp_buf, 1);
+        to_transport_/*PORT_NAME*/( tmp_buf, 1);
 
         if((rx_seq_num == 0) || (rx_seq_num == /*PORT_NAME*/_instance.rx_seq_num + 1)) {
             /*PORT_NAME*/_instance.rx_seq_num = rx_seq_num;
-            from_transport_/*PORT_NAME*/( &(rcv_buf_ptr[1]), rcv_len-1);
+            from_shim_/*PORT_NAME*/( &(rcv_buf_ptr[1]), rcv_len-1);
         } else {
               printf("/*PORT_NAME*/ RxData rx(%d) != expected_rx(%d)\n", rx_seq_num, /*PORT_NAME*/_instance.rx_seq_num + 1);
         }
@@ -140,10 +140,10 @@ void /*CFG_CPPNAME_SCOPE*//*PORT_NAME*/_send_oldest_in_tx_buf(void){
             
             //printf("/*PORT_NAME*/ Send oldest len(%d) seq(%d)\n", buf_len, /*PORT_NAME*/_instance.tx_seq_num);
 
-            to_link_/*PORT_NAME*/( tmp_buf, buf_len+1);
+            to_transport_/*PORT_NAME*/( tmp_buf, buf_len+1);
             /*PORT_NAME*/_instance.last_sent_tick = HOST_TICK_NOW();
         }
     }
 }
 
-/* ******** End of template RcdPortTransportAck.c */
+/* ******** End of template RcdPortShimAck.c */
