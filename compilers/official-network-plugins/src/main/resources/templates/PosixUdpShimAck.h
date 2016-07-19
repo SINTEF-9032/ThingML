@@ -12,8 +12,8 @@
 #define /*PORT_NAME*/_TIMEOUT_MS /*TIMEOUT_MS*/
 
 static unsigned long long get_system_time_/*PORT_NAME*/(void);
-static void to_shim_/*PORT_NAME*/( unsigned char *rcv_buf_ptr, unsigned int rcv_buf_len);
-static void from_transport_/*PORT_NAME*/( unsigned char *buf_ptr, unsigned int buf_len);
+static void to_shim_/*PORT_NAME*/( byte *rcv_buf_ptr, unsigned int rcv_buf_len);
+static void from_transport_/*PORT_NAME*/( byte *buf_ptr, unsigned int buf_len);
 
 static void /*PORT_NAME*/_timeout_check(void);
 static unsigned int /*PORT_NAME*/_remove_oldest_from_tx_buf(void);
@@ -29,7 +29,7 @@ unsigned int tx_buf_rd_idx;
 unsigned int tx_buf_wr_idx;
 unsigned int rx_seq_num;
 unsigned int tx_seq_num;
-unsigned char tx_buf[/*PORT_NAME*/_TX_BUF_SIZE];
+byte tx_buf[/*PORT_NAME*/_TX_BUF_SIZE];
 unsigned long long last_sent_ms;
 
 /*SHIM_INFO_END*/

@@ -8,14 +8,15 @@ static unsigned long long get_system_time_/*PORT_NAME*/(void) {
     (unsigned long long)(tv.tv_usec) / 1000;
 
     return millisecondsSinceEpoch;
-end
+}
 
-static void to_shim_/*PORT_NAME*/( unsigned char *buf_ptr, unsigned int buf_len){
+static void to_shim_/*PORT_NAME*/( byte *buf_ptr, unsigned int buf_len){
     unsigned int wr_idx = /*PORT_NAME*/_instance.tx_buf_wr_idx;
     unsigned int rd_idx = /*PORT_NAME*/_instance.tx_buf_rd_idx;
-    unsigned char *tx_buf_ptr =  /*PORT_NAME*/_instance.tx_buf;
+    byte *tx_buf_ptr =  /*PORT_NAME*/_instance.tx_buf;
     unsigned int req_len;
     bool empty_buf = rd_idx == wr_idx;
+    int i;
     
     if( buf_len <= /*PORT_NAME*/_MTU_SIZE ) {
         
@@ -26,7 +27,7 @@ static void to_shim_/*PORT_NAME*/( unsigned char *buf_ptr, unsigned int buf_len)
         //printf("/*PORT_NAME*/ Put into tx buf len(%d) (%d)\n", buf_len, empty_buf);
         tx_buf_ptr[wr_idx] = buf_len;
         wr_idx = (wr_idx + 1) % /*PORT_NAME*/_TX_BUF_SIZE;
-        for (int i = 0; i < buf_len; i++) {
+        for (i = 0; i < buf_len; i++) {
             tx_buf_ptr[wr_idx] = buf_ptr[i];
             wr_idx = (wr_idx + 1) % /*PORT_NAME*/_TX_BUF_SIZE;
         }
@@ -42,7 +43,7 @@ static void to_shim_/*PORT_NAME*/( unsigned char *buf_ptr, unsigned int buf_len)
     }
 }
 
-static void from_transport_/*PORT_NAME*/( unsigned char *rcv_buf_ptr, unsigned int rcv_len){
+static void from_transport_/*PORT_NAME*/( byte *rcv_buf_ptr, unsigned int rcv_len){
 
     unsigned int rx_seq_num = rcv_buf_ptr[0];
     if(rcv_len == 1) {
@@ -61,9 +62,9 @@ static void from_transport_/*PORT_NAME*/( unsigned char *rcv_buf_ptr, unsigned i
         //printf("/*PORT_NAME*/ RxData len(%d) seq(%d)\n", rcv_len, rx_seq_num);
 
         // Send ACK to remote ...
-        unsigned char tmp_buf[1];
+        byte tmp_buf[1];
         tmp_buf[0] = rx_seq_num;
-        to_transport_/*PORT_NAME*/( tmp_buf, 1);
+        /*PORT_NAME*/_forwardMessage( tmp_buf, 1);
 
         if((rx_seq_num == 0) || (rx_seq_num == /*PORT_NAME*/_instance.rx_seq_num + 1)) {
             /*PORT_NAME*/_instance.rx_seq_num = rx_seq_num;
@@ -132,17 +133,18 @@ static void /*PORT_NAME*/_make_room_in_tx_buf( unsigned int req_len){
 }
 
 static void /*PORT_NAME*/_send_oldest_in_tx_buf(void){
-    unsigned char tmp_buf[/*PORT_NAME*/_MTU_SIZE];
+    byte tmp_buf[/*PORT_NAME*/_MTU_SIZE];
     if( /*PORT_NAME*/_instance.tx_buf_rd_idx != /*PORT_NAME*/_instance.tx_buf_wr_idx){
         unsigned int rd_idx = /*PORT_NAME*/_instance.tx_buf_rd_idx;
-        unsigned int *tx_buf_ptr =  /*PORT_NAME*/_instance.tx_buf;
+        byte *tx_buf_ptr =  /*PORT_NAME*/_instance.tx_buf;
         unsigned int buf_len;
+        int i;
 
         tmp_buf[0] = /*PORT_NAME*/_instance.tx_seq_num;
 
         buf_len = tx_buf_ptr[rd_idx];
         rd_idx = (rd_idx + 1) % /*PORT_NAME*/_TX_BUF_SIZE;
-        for (int i = 0; i < buf_len; i++) {
+        for (i = 0; i < buf_len; i++) {
             tmp_buf[i+1] = tx_buf_ptr[rd_idx];
             rd_idx = (rd_idx + 1) % /*PORT_NAME*/_TX_BUF_SIZE;
         }
