@@ -96,6 +96,27 @@ public class PosixUDPPlugin extends NetworkPlugin {
             messages = new HashSet();
         }
 
+        public String getShimName() {
+            String ret = "none";
+            
+            if (AnnotatedElementHelper.hasAnnotation(protocol, "shim_name")) {
+                ret = AnnotatedElementHelper.annotation(protocol, "shim_name").iterator().next();
+            }
+            ret = ret.toLowerCase();
+            return ret;
+        }
+        
+        public boolean useShim() {
+            boolean ret = false;
+            
+            if (getShimName().contentEquals("none")) {
+                ret = false;
+            } else {
+                ret = true;
+            }
+            return ret;
+        }
+        
         public void generateMessageForwarders(StringBuilder builder, StringBuilder headerbuilder, Configuration cfg, Protocol prot) {
             for (ThingPortMessage tpm : getMessagesSent(cfg, prot)) {
                 Thing t = tpm.t;
@@ -122,14 +143,24 @@ public class PosixUDPPlugin extends NetworkPlugin {
                 if(AnnotatedElementHelper.hasAnnotation(protocol, "udp_target_selection")) {
                     builder.append(prot.getName() + "_forwardMessage(forward_buf, " + i + ", " + paramIP + ", " + paramPort + ");\n");
                 } else {
-                    builder.append(prot.getName() + "_forwardMessage(forward_buf, " + i + ");\n");
+                    if(useShim()) {
+                        builder.append("to_shim_" + prot.getName() + "(forward_buf, " + i + ");\n");
+                    } else {
+                        builder.append(prot.getName() + "_forwardMessage(forward_buf, " + i + ");\n");
+                    }
                 }
                 builder.append("}\n\n");
 
             }
         }
 
-
+        public String getSection(String source_string, String start_string, String end_string) {
+            int startIdx = source_string.indexOf(start_string);
+            int endIdx = source_string.lastIndexOf(end_string) + end_string.length();
+            String ret = source_string.substring(startIdx, endIdx);
+            return ret;
+        }
+        
         void generateNetworkLibrary(CCompilerContext ctx, Configuration cfg) {
             if (!ecos.isEmpty()) {
                 String ctemplate = ctx.getTemplateByID("templates/PosixUDPPlugin.c");
@@ -183,6 +214,38 @@ public class PosixUDPPlugin extends NetworkPlugin {
                     ctemplate = ctemplate.replace("/*REMOTE_CFG_FORWARD*/", "");
                 }
 
+                if (useShim()) {
+                    String ctemplateTransport = "";
+                    String htemplateTransport = "";
+
+                    String shimName = getShimName();
+                    System.out.println("Protocol " + portName + " using shim(" + shimName + ")");
+                    if( shimName.contentEquals("ack")) {
+                        ctemplateTransport = ctx.getTemplateByID("templates/PosixUdpShimAck.c");
+                        htemplateTransport = ctx.getTemplateByID("templates/PosixUdpShimAck.h");
+                    }
+                    
+                    // Merge transport into base template
+                    ctemplate = ctemplate.replace("/*SHIM_FUNCTIONS*/", ctemplateTransport);
+                    
+                    ctemplate = ctemplate.replace("/*SHIM_INFORMATION*/", getSection(htemplateTransport, "/*SHIM_INFO_START*/", "/*SHIM_INFO_END*/"));
+                    ctemplate = ctemplate.replace("/*SHIM_PROTOTYPES*/", getSection(htemplateTransport, "/*SHIM_PROTO_START*/", "/*SHIM_PROTO_END*/"));
+                    
+                    String txBufSize = AnnotatedElementHelper.hasAnnotation(protocol, "shim_tx_buf_size") ? AnnotatedElementHelper.annotation(protocol, "shim_tx_buf_size").get(0) : "40";
+                    ctemplate = ctemplate.replace("/*TX_BUF_SIZE*/", txBufSize);
+                    System.out.println("Protocol " + portName + " using annontation shim_tx_buf_size(" + txBufSize + ")");
+                    String mtuSize = AnnotatedElementHelper.hasAnnotation(protocol, "shim_mtu_size") ? AnnotatedElementHelper.annotation(protocol, "shim_mtu_size").get(0) : "14";
+                    ctemplate = ctemplate.replace("/*MTU_SIZE*/", mtuSize);
+                    System.out.println("Protocol " + portName + " using annontation shim_mtu_size(" + mtuSize + ")");
+                    String timeoutMs = AnnotatedElementHelper.hasAnnotation(protocol, "shim_timeout_ms") ? AnnotatedElementHelper.annotation(protocol, "shim_timeout_ms").get(0) : "2000";
+                    ctemplate = ctemplate.replace("/*TIMEOUT_MS*/", timeoutMs);
+                    System.out.println("Protocol " + portName + " using annontation shim_timeout_ms(" + timeoutMs + ")");
+                } else {
+                    System.out.println("Protocol " + portName + " no shim specified");
+                }
+
+                
+                
                 ctemplate = ctemplate.replace("/*PORT_NAME*/", portName);
                 htemplate = htemplate.replace("/*PORT_NAME*/", portName);
 
@@ -225,11 +288,20 @@ public class PosixUDPPlugin extends NetworkPlugin {
 
                 ctemplate = ctemplate.replace("/*PARSER_IMPLEMENTATION*/", sp.generateSubFunctions() + ParserImplementation);
 
-                String ParserCall = portName + "_parser(buf, recv_len";
+                String ParserCall = "";
                 if(AnnotatedElementHelper.hasAnnotation(protocol, "udp_target_selection")) {
+                    ParserCall = portName + "_parser(buf, recv_len";
                     ParserCall += ", " + portName + "_si_rcv.sin_addr.s_addr, ntohs(" + portName + "_si_rcv.sin_port)";
+                    ParserCall += ");";
+                } else {
+                    if(useShim()) {
+                        ParserCall = "from_transport_" + portName + "(buf, recv_len";
+                        ParserCall += ");";
+                    } else {
+                        ParserCall = portName + "_parser(buf, recv_len";
+                        ParserCall += ");";
+                    }
                 }
-                ParserCall += ");";
                 ctemplate = ctemplate.replace("/*PARSER_CALL*/", ParserCall);
 
                 ctemplate = ctemplate.replace("/*PARSER_IMPLEMENTATION*/", ParserImplementation);

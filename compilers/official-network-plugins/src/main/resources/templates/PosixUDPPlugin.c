@@ -10,9 +10,13 @@
 #define /*PORT_NAME*/_REMOTE_PORT /*REMOTE_PORT*/ 
 #define /*PORT_NAME*/_REMOTE_ADDR "/*REMOTE_ADDR*/"
 
+/*SHIM_PROTOTYPES*/
+
 struct /*PORT_NAME*/_instance_type {
     uint16_t listener_id;
     /*INSTANCE_INFORMATION*/
+
+    /*SHIM_INFORMATION*/
 };
 
 extern struct /*PORT_NAME*/_instance_type /*PORT_NAME*/_instance;
@@ -88,4 +92,7 @@ void /*PORT_NAME*/_start_receiver_process()
 }
 
 /*FORWARDERS*/
+
+/*SHIM_FUNCTIONS*/
+
 
